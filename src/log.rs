@@ -38,6 +38,8 @@ pub trait Logger {
     fn can_log_item<Tz: TimeZone>(&self, _item: &LogItem<Tz>) -> bool
     where
         Tz::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<Tz>>,
+        DateTime<Utc>: From<DateTime<Tz>>,
         DateTime<Tz>: Copy,
     {
         return true;

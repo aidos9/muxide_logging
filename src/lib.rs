@@ -18,6 +18,7 @@ mod macros;
 pub use macros::{__default_log_message, __log_message};
 
 pub(crate) type DefaultLogger = FileLogger<chrono::Local>;
+use crate::log::LogLevel;
 use lazy_static::lazy_static;
 use logger::FileLogger;
 use std::path::Path;
@@ -50,6 +51,27 @@ pub fn close_output_file() -> Result<(), String> {
         .lock()
         .map_err(|e| e.to_string())?
         .close_file();
+
+    return Ok(());
+}
+
+/// Prevents the default logger from logging logs at the specified levels.
+pub fn restrict_log_levels(prohibited_levels: &[LogLevel]) -> Result<(), String> {
+    DEFAULT_LOGGER
+        .lock()
+        .map_err(|e| e.to_string())?
+        .restrict_log_levels(prohibited_levels);
+
+    return Ok(());
+}
+
+/// Removes any restrictions on the specified restricted log levels. The [restrict_log_levels] method
+/// must have been called on the specified log levels for any changes to have an affect.
+pub fn allow_log_levels(allowed_log_levels: &[LogLevel]) -> Result<(), String> {
+    DEFAULT_LOGGER
+        .lock()
+        .map_err(|e| e.to_string())?
+        .allow_log_levels(allowed_log_levels);
 
     return Ok(());
 }

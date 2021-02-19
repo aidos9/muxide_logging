@@ -1,7 +1,7 @@
 //! Loggers useful for various types of logging.
 
 use crate::format::Format;
-use crate::log::{LogItem, Logger};
+use crate::log::{LogItem, LogLevel, Logger};
 use chrono::{DateTime, Local, TimeZone, Utc};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -36,6 +36,8 @@ where
     panic_on_fail: bool,
     /// A custom Format to use as an override.
     override_format: Option<Format<Tz>>,
+    /// Any logs with these log levels will be ignored.
+    restricted_log_levels: Vec<LogLevel>,
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +81,7 @@ where
             file: None,
             panic_on_fail: false,
             override_format: None,
+            restricted_log_levels: Vec::new(),
         };
     }
 
@@ -106,10 +109,38 @@ where
     pub fn close_file(&mut self) {
         self.file = None;
     }
+
+    /// Prevent logging any messages with these log levels
+    pub fn restrict_log_levels(&mut self, levels: &[LogLevel]) {
+        for level in levels {
+            if !self.restricted_log_levels.contains(level) {
+                self.restricted_log_levels.push(*level);
+            }
+        }
+    }
+
+    /// Allow any previously restricted log level.
+    pub fn allow_log_levels(&mut self, levels: &[LogLevel]) {
+        for level in levels {
+            if let Some(idx) = self.restricted_log_levels.iter().position(|l| level == l) {
+                self.restricted_log_levels.remove(idx);
+            }
+        }
+    }
 }
 
 impl Logger for FileLogger<Local> {
     type ReturnType = ();
+
+    fn can_log_item<Tz: TimeZone>(&self, item: &LogItem<Tz>) -> bool
+    where
+        Tz::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<Tz>>,
+        DateTime<Utc>: From<DateTime<Tz>>,
+        DateTime<Tz>: Copy,
+    {
+        return !self.restricted_log_levels.contains(&item.level());
+    }
 
     fn log_item<T: TimeZone>(&mut self, item: LogItem<T>) -> Self::ReturnType
     where
@@ -145,6 +176,16 @@ impl Logger for FileLogger<Local> {
 
 impl Logger for FileLogger<Utc> {
     type ReturnType = ();
+
+    fn can_log_item<Tz: TimeZone>(&self, item: &LogItem<Tz>) -> bool
+    where
+        Tz::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<Tz>>,
+        DateTime<Utc>: From<DateTime<Tz>>,
+        DateTime<Tz>: Copy,
+    {
+        return !self.restricted_log_levels.contains(&item.level());
+    }
 
     fn log_item<T: TimeZone>(&mut self, item: LogItem<T>) -> Self::ReturnType
     where
