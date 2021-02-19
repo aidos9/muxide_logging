@@ -3,6 +3,10 @@
 //! The `muxide_logging` crate is built similar to the [Log](https://crates.io/crates/log) crate
 //! however it was designed from scratch, primarily for interest's sake but also because I wanted
 //! an interface I better understood and catered to my specific needs.
+//!
+//! Whilst most structs in this crate support custom timezones, it is not considered a principle
+//! focus and the support is mainly untested but possible if desired. The main intention is to use
+//! the [Local](chrono::Local) timezone where possible and by default.
 
 pub mod format;
 pub mod log;
@@ -13,7 +17,7 @@ mod macros;
 // Internal undocumented methods used within the macros.
 pub use macros::{__default_log_message, __log_message};
 
-pub(crate) type DefaultLogger = FileLogger;
+pub(crate) type DefaultLogger = FileLogger<chrono::Local>;
 use lazy_static::lazy_static;
 use logger::FileLogger;
 use std::path::Path;

@@ -2,6 +2,7 @@
 
 use crate::format::Format;
 use crate::log::{LogItem, Logger};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -17,22 +18,27 @@ use std::path::Path;
 /// use muxide_logging::logger::FileLogger;
 /// use muxide_logging::log::{Logger, LogItem, LogLevel};
 /// use muxide_logging::format::Format;
+/// use chrono::Local;
 ///
-/// let mut logger = FileLogger::new();
+/// let mut logger = FileLogger::<Local>::new();
 /// logger.open_file("file_name").unwrap();
-/// logger.log_item(LogItem::new(Format::default(), LogLevel::Information, "Log message"));
+/// logger.log_item(LogItem::new(Format::<Local>::default(), LogLevel::Information, "Log message"));
 /// ```
 ///
-pub struct FileLogger {
+pub struct FileLogger<Tz: TimeZone>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
     /// The file to write to. We have an optional value so that the user can open a file on demand.
     file: Option<File>,
     /// Whether we should panic on IO errors or ignore them.
     panic_on_fail: bool,
     /// A custom Format to use as an override.
-    override_format: Option<Format>,
+    override_format: Option<Format<Tz>>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 /// An alternative logger, primarily used for testing purposes. However instead of retuning nothing
 /// it will return a string when using each logging macro.
 ///
@@ -44,6 +50,7 @@ pub struct FileLogger {
 /// use muxide_logging::logger::StringLogger;
 /// use muxide_logging::log::{Logger, LogItem, LogLevel};
 /// use muxide_logging::format::{Format, FormatItem};
+/// use chrono::Local;
 ///
 /// let mut logger = StringLogger::new();
 /// let result = logger.log_item(LogItem::new(
@@ -53,13 +60,21 @@ pub struct FileLogger {
 /// assert_eq!(result, "Log message");
 /// ```
 ///
-pub struct StringLogger {
-    override_format: Option<Format>,
+pub struct StringLogger<Tz: TimeZone>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
+    override_format: Option<Format<Tz>>,
 }
 
-impl FileLogger {
+impl<Tz: TimeZone> FileLogger<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
     /// Create a new instance of [FileLogger].
-    pub const fn new() -> Self {
+    pub fn new() -> FileLogger<Tz> {
         return Self {
             file: None,
             panic_on_fail: false,
@@ -76,7 +91,7 @@ impl FileLogger {
     /// Override any format supplied to the [log_item](Logger::log_item) method. This format is not used instead of
     /// the one supplied instead it is merged, selecting any values that are set but preferring
     /// values from the overridden format.
-    pub fn set_override(&mut self, override_format: Format) {
+    pub fn set_override(&mut self, override_format: Format<Tz>) {
         self.override_format = Some(override_format);
     }
 
@@ -93,14 +108,20 @@ impl FileLogger {
     }
 }
 
-impl Logger for FileLogger {
+impl Logger for FileLogger<Local> {
     type ReturnType = ();
 
-    fn log_item(&mut self, item: LogItem) -> Self::ReturnType {
+    fn log_item<T: TimeZone>(&mut self, item: LogItem<T>) -> Self::ReturnType
+    where
+        T::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<T>>,
+        DateTime<Utc>: From<DateTime<T>>,
+        DateTime<T>: Copy,
+    {
         if let Some(file) = &mut self.file {
             let text = match self.override_format.as_ref() {
                 Some(format) => {
-                    let new_format = Format::merged(format, item.format());
+                    let new_format = Format::<Local>::merged(format, item.format());
 
                     new_format.build_string(item.level(), &item.into_message())
                 }
@@ -122,9 +143,54 @@ impl Logger for FileLogger {
     }
 }
 
-impl StringLogger {
-    /// Create a new instance of [StringLogger].
-    pub const fn new() -> Self {
+impl Logger for FileLogger<Utc> {
+    type ReturnType = ();
+
+    fn log_item<T: TimeZone>(&mut self, item: LogItem<T>) -> Self::ReturnType
+    where
+        T::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<T>>,
+        DateTime<Utc>: From<DateTime<T>>,
+        DateTime<T>: Copy,
+    {
+        if let Some(file) = &mut self.file {
+            let text = match self.override_format.as_ref() {
+                Some(format) => {
+                    let new_format = Format::<Utc>::merged(format, item.format());
+
+                    new_format.build_string(item.level(), &item.into_message())
+                }
+                None => item.into(),
+            };
+
+            let res = writeln!(file, "{}", text);
+
+            if self.panic_on_fail {
+                res.unwrap()
+            }
+
+            let res = file.flush();
+
+            if self.panic_on_fail {
+                res.unwrap();
+            }
+        }
+    }
+}
+
+impl StringLogger<Local> {
+    pub fn new() -> Self {
+        return Self::new_tz();
+    }
+}
+
+impl<Tz: TimeZone> StringLogger<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
+    /// Create a new instance of [StringLogger] with a custom Tz.
+    pub fn new_tz() -> Self {
         return Self {
             override_format: None,
         };
@@ -133,19 +199,47 @@ impl StringLogger {
     /// Override any format supplied to the [log_item](Logger::log_item) method. This format is not used instead of
     /// the one supplied instead it is merged, selecting any values that are set but preferring
     /// values from the overridden format.
-    pub fn set_override(&mut self, format: Format) {
+    pub fn set_override(&mut self, format: Format<Tz>) {
         self.override_format = Some(format);
     }
 }
 
-impl Logger for StringLogger {
+impl Logger for StringLogger<Local> {
     /// [StringLogger] returns the formatted [String] instead of nothing.
     type ReturnType = String;
 
-    fn log_item(&mut self, item: LogItem) -> Self::ReturnType {
+    fn log_item<T: TimeZone>(&mut self, item: LogItem<T>) -> Self::ReturnType
+    where
+        T::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<T>>,
+        DateTime<Utc>: From<DateTime<T>>,
+        DateTime<T>: Copy,
+    {
         return match self.override_format.as_ref() {
             Some(format) => {
-                let new_format = Format::merged(format, item.format());
+                let new_format = Format::<Local>::merged(format, item.format());
+
+                new_format.build_string(item.level(), &item.into_message())
+            }
+            None => item.into(),
+        };
+    }
+}
+
+impl Logger for StringLogger<Utc> {
+    /// [StringLogger] returns the formatted [String] instead of nothing.
+    type ReturnType = String;
+
+    fn log_item<T: TimeZone>(&mut self, item: LogItem<T>) -> Self::ReturnType
+    where
+        T::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<T>>,
+        DateTime<Utc>: From<DateTime<T>>,
+        DateTime<T>: Copy,
+    {
+        return match self.override_format.as_ref() {
+            Some(format) => {
+                let new_format = Format::<Utc>::merged(format, item.format());
 
                 new_format.build_string(item.level(), &item.into_message())
             }

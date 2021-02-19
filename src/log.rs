@@ -1,6 +1,7 @@
 //! Log information
 
 use crate::format::Format;
+use chrono::{DateTime, Local, TimeZone, Utc};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Copy, Clone, PartialEq, Debug, Hash)]
@@ -12,11 +13,15 @@ pub enum LogLevel {
     Information,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 /// This item is used to dictate a log, it is used for the [Logger] trait to dictate the format,
 /// level and content of a new log.
-pub struct LogItem {
-    format: Format,
+pub struct LogItem<Tz: TimeZone>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
+    format: Format<Tz>,
     message: String,
     level: LogLevel,
 }
@@ -30,12 +35,21 @@ pub trait Logger {
     /// Returns true if logging an item is permitted. By default this is true but when implementing
     /// a custom logger it may be useful to decline logging an item before the
     /// [log_item](Logger::log_item) method is called.
-    fn can_log_item(&self, _item: &LogItem) -> bool {
+    fn can_log_item<Tz: TimeZone>(&self, _item: &LogItem<Tz>) -> bool
+    where
+        Tz::Offset: std::fmt::Display,
+        DateTime<Tz>: Copy,
+    {
         return true;
     }
 
     /// This method should log an item.
-    fn log_item(&mut self, item: LogItem) -> Self::ReturnType;
+    fn log_item<Tz: TimeZone>(&mut self, item: LogItem<Tz>) -> Self::ReturnType
+    where
+        Tz::Offset: std::fmt::Display,
+        DateTime<Local>: From<DateTime<Tz>>,
+        DateTime<Utc>: From<DateTime<Tz>>,
+        DateTime<Tz>: Copy;
 }
 
 impl LogLevel {
@@ -56,9 +70,15 @@ impl Display for LogLevel {
     }
 }
 
-impl LogItem {
+impl<Tz: TimeZone> LogItem<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Local>: From<DateTime<Tz>>,
+    DateTime<Utc>: From<DateTime<Tz>>,
+    DateTime<Tz>: Copy,
+{
     /// Create a new [LogItem].
-    pub fn new(format: Format, level: LogLevel, message: &str) -> Self {
+    pub fn new(format: Format<Tz>, level: LogLevel, message: &str) -> Self {
         return Self {
             format,
             message: message.to_string(),
@@ -67,12 +87,12 @@ impl LogItem {
     }
 
     /// Get the log level of this log.
-    pub const fn level(&self) -> LogLevel {
+    pub fn level(&self) -> LogLevel {
         return self.level;
     }
 
     /// Get the log message of this log.
-    pub const fn message(&self) -> &String {
+    pub fn message(&self) -> &String {
         return &self.message;
     }
 
@@ -82,12 +102,16 @@ impl LogItem {
     }
 
     /// Get the format of this log.
-    pub const fn format(&self) -> &Format {
+    pub fn format(&self) -> &Format<Tz> {
         return &self.format;
     }
 }
 
-impl Into<String> for LogItem {
+impl<Tz: TimeZone> Into<String> for LogItem<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
     /// Builds the format and returns the built string.
     fn into(self) -> String {
         return self.format.build_string(self.level, &self.message);

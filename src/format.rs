@@ -1,7 +1,7 @@
 //! Formatting for logging messages
 
 use crate::log::LogLevel;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use std::ops::{Index, IndexMut};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -27,7 +27,7 @@ pub enum FormatItem {
     CustomString(String),
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 /// This struct dictates the Format of log message. It is used in the macros and is assigned details
 /// such as a log messages, line, column, module and file. It can also be used largely, for testing
 /// purposes to override whatever time was specified with a custom one.
@@ -56,16 +56,21 @@ pub enum FormatItem {
 /// );
 ///
 /// ```
-pub struct Format {
+pub struct Format<Tz: TimeZone>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: std::cmp::PartialEq,
+    DateTime<Tz>: Copy,
+{
     items: Vec<FormatItem>,
     column: Option<usize>,
     line: Option<usize>,
     file: Option<String>,
     module_path: Option<String>,
-    custom_time: Option<DateTime<Local>>,
+    custom_time: Option<DateTime<Tz>>,
 }
 
-impl Format {
+impl Format<Local> {
     /// Create a new empty [Format]
     pub fn new() -> Self {
         return Self {
@@ -77,10 +82,63 @@ impl Format {
             custom_time: None,
         };
     }
+}
+
+impl<Tz: TimeZone> Format<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
+    /// Create a new empty [Format] but for non-local timezones.
+    pub fn new_tz() -> Self {
+        return Self {
+            items: Vec::new(),
+            column: None,
+            line: None,
+            file: None,
+            module_path: None,
+            custom_time: None,
+        };
+    }
+
+    /// Same as [default](Format::default) but with support for non-local timezones.
+    pub fn default_tz() -> Self {
+        return crate::build_format_from_items_tz!(
+            FormatItem::CustomCharacter('['),
+            FormatItem::TimeString("%k:%M:%S".to_string()),
+            FormatItem::CustomString("] (".to_string()),
+            FormatItem::ModulePath,
+            FormatItem::CustomCharacter(' '),
+            FormatItem::LineNumber,
+            FormatItem::CustomCharacter(':'),
+            FormatItem::ColumnNumber,
+            FormatItem::CustomString(") ".to_string()),
+            FormatItem::LogLevel,
+            FormatItem::CustomString(": ".to_string()),
+            FormatItem::LogString
+        );
+    }
+
+    /// Create a new empty [Format] but with a custom constant time.
+    pub fn new_with_constant_time(constant_time: DateTime<Tz>) -> Self {
+        return Self {
+            items: vec![],
+            column: None,
+            line: None,
+            file: None,
+            module_path: None,
+            custom_time: Some(constant_time),
+        };
+    }
 
     /// Merges two 'Formats' into one, prioritising having a value over not having a value,
     /// but where both contain a value preferring the values from 'a'.
-    pub fn merged(a: &Self, b: &Self) -> Self {
+    pub fn merged<T1: TimeZone>(a: &Format<Tz>, b: &Format<T1>) -> Format<Tz>
+    where
+        T1::Offset: std::fmt::Display,
+        DateTime<T1>: Copy,
+        DateTime<T1>: Into<DateTime<Tz>>,
+    {
         let items = if a.items.len() == 0 {
             b.items.clone()
         } else {
@@ -107,13 +165,13 @@ impl Format {
             a.module_path.clone()
         };
 
-        let custom_time = if a.custom_time.is_none() {
-            b.custom_time
+        let custom_time: Option<DateTime<Tz>> = if a.custom_time.is_none() {
+            b.custom_time.as_ref().map(|t| t.clone().into())
         } else {
-            a.custom_time
+            a.custom_time.clone()
         };
 
-        return Self {
+        return Format {
             items,
             column,
             line,
@@ -222,7 +280,7 @@ impl Format {
     }
 
     /// Set a custom time to override the current time.
-    pub fn set_constant_time(mut self, time: DateTime<Local>) -> Self {
+    pub fn set_constant_time(mut self, time: DateTime<Tz>) -> Self {
         self.custom_time = Some(time);
 
         return self;
@@ -250,7 +308,11 @@ impl Format {
     }
 }
 
-impl Index<usize> for Format {
+impl<Tz: TimeZone> Index<usize> for Format<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
     type Output = FormatItem;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -258,13 +320,32 @@ impl Index<usize> for Format {
     }
 }
 
-impl IndexMut<usize> for Format {
+impl<Tz: TimeZone> IndexMut<usize> for Format<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy,
+{
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         return self.items.index_mut(index);
     }
 }
 
-impl Default for Format {
+impl<Tz: TimeZone> PartialEq for Format<Tz>
+where
+    Tz::Offset: std::fmt::Display,
+    DateTime<Tz>: Copy + PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        return self.file == other.file
+            && self.custom_time == other.custom_time
+            && self.module_path == other.module_path
+            && self.column == other.column
+            && self.line == other.line
+            && self.items == other.items;
+    }
+}
+
+impl Default for Format<Local> {
     /// Creates a new instance of [Format] with the format
     /// `[HH:MM:SS] (module_path line:column) log_level: log_message`
     fn default() -> Self {
@@ -285,11 +366,24 @@ impl Default for Format {
     }
 }
 
+impl From<Format<Local>> for Format<Utc> {
+    fn from(fmt: Format<Local>) -> Self {
+        return Self {
+            items: fmt.items,
+            column: fmt.column,
+            line: fmt.line,
+            file: fmt.file,
+            module_path: fmt.module_path,
+            custom_time: fmt.custom_time.map(|dt| dt.into()),
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::format::{Format, FormatItem};
     use crate::log::LogLevel;
-    use chrono::DateTime;
+    use chrono::{DateTime, Utc};
 
     #[test]
     fn test_default() {
@@ -321,8 +415,9 @@ mod tests {
 
     #[test]
     fn test_build_default() {
+        // Use Utc for these tests so they pass on other machines
         assert_eq!(
-            Format::default()
+            Format::<Utc>::default_tz()
                 .set_column(0)
                 .set_line(123)
                 .set_module_path("muxide_logger::log")
@@ -330,7 +425,17 @@ mod tests {
                     DateTime::parse_from_rfc2822("Tue, 1 Jul 2003 10:52:37 +0000").unwrap()
                 ))
                 .build_string(LogLevel::Warning, "Some Warning"),
-            "[20:52:37] (muxide_logger::log 123:0) Warning: Some Warning".to_string(),
+            "[10:52:37] (muxide_logger::log 123:0) Warning: Some Warning".to_string(),
         )
+    }
+
+    #[test]
+    fn test_format_index() {
+        assert_eq!(
+            Format::new()
+                .append(FormatItem::LogLevel)
+                .append(FormatItem::ColumnNumber)[0],
+            FormatItem::LogLevel
+        );
     }
 }

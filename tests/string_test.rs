@@ -1,12 +1,12 @@
 mod shared;
 
-use chrono::DateTime;
+use chrono::{DateTime, Local};
 use muxide_logging::format::Format;
 use muxide_logging::logger::StringLogger;
 use muxide_logging::*;
 use shared::*;
 
-pub fn create_string_logger() -> StringLogger {
+pub fn create_string_logger() -> StringLogger<Local> {
     let mut logger = StringLogger::new();
 
     logger.set_override(Format::default().set_constant_time(DateTime::from(
