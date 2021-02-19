@@ -38,11 +38,11 @@ pub enum FormatItem {
 /// # Example
 /// The default format.
 /// ```
-/// use chrono::DateTime;
+/// use chrono::{DateTime, Utc};
 /// use muxide_logging::format::Format;
 /// use muxide_logging::log::LogLevel;
 ///
-/// let mut fmt = Format::default()
+/// let mut fmt = Format::<Utc>::default_tz()
 ///      .set_column(123)
 ///      .set_line(456)
 ///      .set_module_path("my_crate::file")
@@ -52,7 +52,7 @@ pub enum FormatItem {
 ///
 /// assert_eq!(
 ///     fmt.build_string(LogLevel::Error, "My Error"),
-///     "[20:52:37] (my_crate::file 456:123) Error: My Error".to_string()
+///     "[10:52:37] (my_crate::file 456:123) Error: My Error".to_string()
 /// );
 ///
 /// ```
