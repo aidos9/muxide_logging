@@ -2,6 +2,7 @@ mod shared;
 
 use chrono::DateTime;
 use muxide_logging::format::Format;
+use muxide_logging::log::LogLevel;
 use muxide_logging::logger::StringLogger;
 use muxide_logging::*;
 use shared::*;
@@ -47,6 +48,10 @@ fn file_test() {
     state_change!(TEST_STATE_CHANGE_MESSAGE);
     comp.push_str(&state_change!(TEST_STATE_CHANGE_MESSAGE, comp_logger).unwrap());
     comp.push('\n');
+
+    restrict_log_levels(&[LogLevel::Information]).unwrap();
+    info!(TEST_INFORMATION_MESSAGE);
+    allow_log_levels(&[LogLevel::Information]).unwrap();
 
     info!(TEST_INFORMATION_MESSAGE);
     comp.push_str(&info!(TEST_INFORMATION_MESSAGE, comp_logger).unwrap());
