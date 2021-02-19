@@ -1,15 +1,15 @@
 mod shared;
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Utc};
 use muxide_logging::format::Format;
 use muxide_logging::logger::StringLogger;
 use muxide_logging::*;
 use shared::*;
 
-pub fn create_string_logger() -> StringLogger<Local> {
-    let mut logger = StringLogger::new();
+pub fn create_string_logger() -> StringLogger<Utc> {
+    let mut logger = StringLogger::new_tz();
 
-    logger.set_override(Format::default().set_constant_time(DateTime::from(
+    logger.set_override(Format::default_tz().set_constant_time(DateTime::from(
         DateTime::parse_from_rfc2822("Tue, 1 Jul 2003 10:52:37 +0000").unwrap(),
     )));
 
@@ -23,7 +23,7 @@ fn test_error_macro() {
     assert_eq!(
         res,
         format!(
-            "[20:52:37] ({} {}:15) Error: {}",
+            "[10:52:37] ({} {}:15) Error: {}",
             module_path!(),
             line!() - 7,
             TEST_ERROR_MESSAGE,
@@ -38,7 +38,7 @@ fn test_warning_macro() {
     assert_eq!(
         res,
         format!(
-            "[20:52:37] ({} {}:15) Warning: {}",
+            "[10:52:37] ({} {}:15) Warning: {}",
             module_path!(),
             line!() - 7,
             TEST_WARNING_MESSAGE,
@@ -53,7 +53,7 @@ fn test_state_change_macro() {
     assert_eq!(
         res,
         format!(
-            "[20:52:37] ({} {}:15) StateChange: {}",
+            "[10:52:37] ({} {}:15) StateChange: {}",
             module_path!(),
             line!() - 7,
             TEST_STATE_CHANGE_MESSAGE,
@@ -68,7 +68,7 @@ fn test_info_macro() {
     assert_eq!(
         res,
         format!(
-            "[20:52:37] ({} {}:15) Information: {}",
+            "[10:52:37] ({} {}:15) Information: {}",
             module_path!(),
             line!() - 7,
             TEST_INFORMATION_MESSAGE,
