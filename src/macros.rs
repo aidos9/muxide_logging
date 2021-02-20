@@ -223,9 +223,9 @@ macro_rules! log_message {
 
 #[doc(hidden)]
 /// A wrapper for __log_message that tries to lock the default logger.
-pub fn __default_log_message<Tz: TimeZone>(
+pub fn __default_log_message<S: AsRef<str>, Tz: TimeZone>(
     log_level: LogLevel,
-    message: &str,
+    message: S,
     format: Format<Tz>,
 ) -> Option<<DefaultLogger as Logger>::ReturnType>
 where
@@ -244,9 +244,9 @@ where
 #[doc(hidden)]
 /// Internal method used to write the log message to a file. We need a method instead of including
 /// the macro because 'let' variables are not supported in some of the contexts we wish to support.
-pub fn __log_message<Tz: TimeZone, L: Logger + Logger<ReturnType = T>, T>(
+pub fn __log_message<S: AsRef<str>, Tz: TimeZone, L: Logger + Logger<ReturnType = T>, T>(
     log_level: LogLevel,
-    message: &str,
+    message: S,
     format: Format<Tz>,
     logger: &mut L,
 ) -> Option<T>
@@ -256,7 +256,7 @@ where
     DateTime<Utc>: From<DateTime<Tz>>,
     DateTime<Tz>: Copy,
 {
-    let item = LogItem::new(format, log_level, message);
+    let item = LogItem::new(format, log_level, message.as_ref());
 
     if logger.can_log_item(&item) {
         return Some(logger.log_item(item));
