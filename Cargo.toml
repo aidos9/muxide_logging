@@ -1,10 +1,10 @@
 [package]
 name = "muxide_logging"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["aidos9 <20310468+aidos9@users.noreply.github.com>"]
 edition = "2018"
 
 [dependencies]
 chrono = "0.4"
-thread-id = "3.3"
+thread-id = "4.0"
 lazy_static = "1.4"

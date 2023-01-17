@@ -209,15 +209,15 @@ macro_rules! build_format_from_items_tz {
 /// Helper macro for logging a message to a logger.
 macro_rules! log_message {
     ($log_level:expr, $message:expr, $format:expr, $logger:expr) => {
-        $crate::__log_message($log_level, $message, $format, &mut $logger);
+        $crate::__log_message($log_level, $message, $format, &mut $logger)
     };
 
     ($log_level:expr, $message:expr, $logger:expr) => {
-        $crate::log_message!($log_level, $message, $crate::default_format!(), $logger);
+        $crate::log_message!($log_level, $message, $crate::default_format!(), $logger)
     };
 
     ($log_level:expr, $message:expr) => {
-        $crate::__default_log_message($log_level, $message, $crate::default_format!());
+        $crate::__default_log_message($log_level, $message, $crate::default_format!())
     };
 }
 
